@@ -1,0 +1,122 @@
+# Project: FollowNestMobile (Expo + React Native)
+
+## 0) North Star
+- Primary goals: readability > correctness > performance > cleverness.
+- Design invariants: SRP, OCP, explicit boundaries, pure UI/domain split, high testability.
+
+## 1) Architecture & Folders
+- UI composition at the edges (expo-router). No business rules in screens.
+- Feature slices with view-models/hooks; services handle I/O/platform work.
+
+mobile/
+├─ .env.example
+├─ app.config.ts
+├─ package.json
+├─ tsconfig.json
+├─ eas.json
+├─ assets/ # fonts, icons, images
+├─ app/ # expo-router routes (edge/UI composition)
+│ ├─ _layout.tsx
+│ ├─ index.tsx
+│ ├─ (auth)/
+│ └─ (tabs)/
+└─ src/
+├─ components/
+│ ├─ ui/ # dumb, reusable components
+│ └─ composites/ # UI composition only
+├─ features/
+│ ├─ users/
+│ │ ├─ screens/
+│ │ ├─ view-models/ # orchestrate services; no fetch in screens
+│ │ └─ components/
+├─ services/ # platform/integration adapters
+│ ├─ api/ # axios clients, DTO mappers
+│ ├─ storage/ # SecureStore/AsyncStorage
+│ ├─ auth/ # session manager
+│ └─ notifications/
+├─ domain/ # optional: pure models/value objects (no RN imports)
+├─ state/ # Zustand/Jotai/Redux (serializable)
+├─ hooks/
+├─ i18n/
+├─ theme/
+├─ utils/
+└─ tests/ # unit / component / e2e (Detox/Maestro)
+
+## 2) SRP/OCP Guardrails
+- One reason to change per file. Screens render; view-models orchestrate; services integrate.
+- Prefer new strategy/adapter/view-model over editing cross-cutting code.
+- Keep components small; avoid "God screens".
+
+## 3) Networking & Data
+- `services/api` is the single entry for HTTP. Axios instance with base URL, timeouts, interceptors.
+- Map **DTOs** ↔ **domain models** near the edge; never pass raw DTOs into components/state.
+- Handle errors centrally; expose typed results to view-models.
+- Use WebSockets (socket.io-client) behind a `RealtimeClient` adapter with reconnect strategy.
+
+## 4) Auth
+- Store tokens in SecureStore (not AsyncStorage) when available; fall back guarded.
+- Refresh flows encapsulated in `services/auth`; never in screens.
+- Add auth headers via Axios interceptor; handle 401 with a single re-auth path.
+
+## 5) Device Capabilities (Expo)
+- Camera/Barcode/Audio/Notifications/DocumentPicker/FileSystem/SQLite are adapters in `services/*`.
+- Request permissions just-in-time; check + explain rationale UI.
+- Use **config plugins** for native capabilities; keep `app.config.ts` the source of truth.
+
+## 6) State Management
+- Keep global state minimal and serializable (auth/session, app config).
+- Local/UI state stays in components or view-model hooks.
+- No business rules in reducers; those belong in domain or view-models.
+
+## 7) UI & Accessibility
+- UI libs: React Native Paper + Vector Icons + SVG.
+- Components accept plain props; no direct API calls.
+- Accessibility first: labels, roles, hitSlop, large text support, color-contrast.
+- Theming via `theme/` with dark mode support; no inline magic numbers.
+
+## 8) Performance
+- Measure before optimizing; prefer FlatList/SectionList for lists with keys.
+- Memoize heavy components (`memo`, `useMemo`, `useCallback` judiciously).
+- Avoid unnecessary re-renders (co-locate state, split components).
+- Images: correct sizes and caching; defer large work off critical path.
+
+## 9) Offline & Persistence
+- AsyncStorage for non-sensitive prefs; SecureStore for secrets.
+- Optional SQLite for durable offline caches; version schema and migrate explicitly.
+- Queue writes when offline; reconcile on reconnect in a single place.
+
+## 10) Error Handling & UX
+- Central error boundary for fatal UI errors.
+- User-facing errors are friendly and actionable; technical details logged only.
+- All service calls return typed results; no raw `throw` from deep layers into UI.
+
+## 11) Observability
+- Log important user actions and failures with correlation IDs (shared with backend where possible).
+- Feature-level analytics events live in view-models, not screens.
+- Avoid logging PII; scrub tokens/IDs.
+
+## 12) Build, Delivery, Config
+- EAS for builds/submit; OTA via `eas update`. Track channels/rollouts per environment.
+- All env in `app.config.ts` (and `.env.example`). Do not hardcode URLs/keys.
+- Keep `metro.config.js` minimal; no custom transforms without ADR.
+
+## 13) Code Style & Naming
+- Screens: `FeatureScreen.tsx`; components: `Noun.tsx`; hooks: `useVerbNoun.ts`.
+- Services: `ThingService`, adapters: `ExpoThingAdapter`, clients: `HttpClient`.
+- Comments explain **why**; refactor if **what** needs long comments.
+
+## 14) Definition of Done
+- Feature is accessible, test-covered, and resilient offline/online.
+- DTO ↔ domain mapping included; error paths handled.
+- Telemetry events added; feature flagged if risky.
+- Docs/ADR updated if architecture changed.
+
+## 15) Useful Scripts
+- `start`: expo start
+- `android`: expo run:android
+- `ios`: expo run:ios
+- `build`: eas build --platform all
+- `update`: eas update --auto
+- `lint`: eslint .
+- `test`: jest
+- `typecheck`: tsc --noEmit
